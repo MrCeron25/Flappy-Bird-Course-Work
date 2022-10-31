@@ -1,7 +1,6 @@
 package com.example.flappybird
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import android.graphics.*
 import android.os.Build
@@ -19,14 +18,19 @@ class GameView(context: Context) : View(context) {
         invalidate()
     }
 
+    private lateinit var background: Bitmap
     private val heightPixels: Int
     private val widthPixels: Int
-    private val background: Bitmap
     private val base: Bitmap
+    private val gameOver: Bitmap
+    private val gameOverRectangle: Rect
     private val backgroundRectangle: Rect
     private val baseRectangle: Rect
     private val flappyBird: FlappyBird
     private var birdX: Float
+    private var startBirdY: Float
+    private var maxBirdY: Float
+    private var minBirdY: Float
     private var birdY: Float
     private var velocity: Int = 0 // скорость
     private var gravity: Int = 5 // гравитация
@@ -37,22 +41,31 @@ class GameView(context: Context) : View(context) {
         val displayMetrics = context.resources.displayMetrics
         heightPixels = getFullHeight(displayMetrics.heightPixels)
         widthPixels = displayMetrics.widthPixels
+        // set game over
+        val gameOverImage = BitmapFactory.decodeResource(resources, R.drawable.gameover)
+        gameOver = Bitmap.createScaledBitmap(
+            gameOverImage, widthPixels.minusPercentNumber(30), gameOverImage.height, false
+        )
+        val leftGameOver = widthPixels / 2 - gameOver.width / 2
+        val topGameOver = heightPixels / 2 - gameOver.height / 2
+        val rightGameOver = leftGameOver + gameOver.width
+        val bottomGameOver = topGameOver + gameOver.height
+        gameOverRectangle = Rect(leftGameOver, topGameOver, rightGameOver, bottomGameOver)
         // set random background
-        val backgroundRandom = (0..1).shuffled().first()
-        background = if (backgroundRandom == 0) {
-            BitmapFactory.decodeResource(resources, R.drawable.background_day)
-        } else {
-            BitmapFactory.decodeResource(resources, R.drawable.background_night)
-        }
+        setRandomBackground()
         backgroundRectangle = Rect(0, 0, widthPixels, heightPixels)
         // set and resize base
         val baseImage = BitmapFactory.decodeResource(resources, R.drawable.base)
         base = Bitmap.createScaledBitmap(baseImage, widthPixels, baseImage.height, false)
-        baseRectangle = Rect(0, heightPixels - base.height, base.width, heightPixels)
-        // getting images
+        val leftBase = 0
+        val topBase = heightPixels - base.height
+        val rightBase = leftBase + base.width
+        val bottomBase = topBase + base.height
+        baseRectangle = Rect(leftBase, topBase, rightBase, bottomBase)
+        // getting flappy images
         val flappyImageState1 = BitmapFactory.decodeResource(resources, R.drawable.flappy_state_1)
         val flappyImageState2 = BitmapFactory.decodeResource(resources, R.drawable.flappy_state_2)
-        // zoomed flappy
+        // set zoomed flappy
         flappyBird = FlappyBird(
             Bitmap.createScaledBitmap(
                 flappyImageState1,
@@ -68,8 +81,11 @@ class GameView(context: Context) : View(context) {
             ),
         )
         // flappy position
-        birdX = (widthPixels / 2 - flappyBird.imageState1.width / 2).toFloat()
-        birdY = (heightPixels / 2 - flappyBird.imageState1.height / 2).toFloat()
+        startBirdY = heightPixels / 2 - flappyBird.imageState1.height / 2.toFloat()
+        birdX = widthPixels / 2 - flappyBird.imageState1.width / 2.toFloat()
+        birdY = startBirdY
+        maxBirdY = heightPixels - base.height - flappyBird.imageState1.height.toFloat()
+        minBirdY = 0F
     }
 
     @SuppressLint("InternalInsetResource")
@@ -80,12 +96,6 @@ class GameView(context: Context) : View(context) {
         if (resourceId > 0) {
             statusBarHeight = resources.getDimensionPixelSize(resourceId)
         }
-//        // action bar height
-//        var actionBarHeight = 0
-//        val styledAttributes: TypedArray =
-//            (context as Activity).theme.obtainStyledAttributes(intArrayOf(android.R.attr.actionBarSize))
-//        actionBarHeight = styledAttributes.getDimension(0, 0f).toInt()
-//        styledAttributes.recycle()
 
         // navigation bar height
         var navigationBarHeight = 0
@@ -94,6 +104,15 @@ class GameView(context: Context) : View(context) {
             navigationBarHeight = resources.getDimensionPixelSize(resourceId2)
         }
         return heightPixels + navigationBarHeight + statusBarHeight
+    }
+
+    private fun setRandomBackground() {
+        val backgroundRandom = (0..1).shuffled().first()
+        background = if (backgroundRandom == 0) {
+            BitmapFactory.decodeResource(resources, R.drawable.background_day)
+        } else {
+            BitmapFactory.decodeResource(resources, R.drawable.background_night)
+        }
     }
 
     private fun drawBackground(canvas: Canvas) {
@@ -105,7 +124,7 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun drawGameOver(canvas: Canvas) {
-        canvas.drawBitmap(base, null, baseRectangle, null)
+        canvas.drawBitmap(gameOver, null, gameOverRectangle, null)
     }
 
     private fun drawFlappy(canvas: Canvas) {
@@ -123,57 +142,42 @@ class GameView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
+        // рисование элементов
         drawBackground(canvas)
         drawBase(canvas)
         drawFlappy(canvas)
 
-//        if (birdY < heightPixels - flappyBird.imageState1.height || velocity < 0) {
-//        if (birdY < heightPixels - flappyBird.imageState1.height
-//        ) {
-//        if (birdY > heightPixels - flappyBird.imageState1.height) {
-//            birdY = (heightPixels - flappyBird.imageState1.height).toFloat()
-//
-        if (birdY > heightPixels - base.height - flappyBird.imageState1.height) {
-            birdY = (heightPixels - base.height - flappyBird.imageState1.height).toFloat()
-//            gameState = GameState.GAME_OVER
-        }
         if (gameState == GameState.GAME) {
-            velocity += gravity
-            birdY += velocity
-            println("$velocity $birdY")
-        } else if (gameState == GameState.GAME_OVER) {
-
+            velocity += gravity // увеличиваю скорость падения
+            if (birdY + velocity >= maxBirdY) { // упал
+                birdY = maxBirdY // не дает упасть ниже base
+                gameState = GameState.GAME_OVER
+            } else if (birdY < minBirdY) {
+                birdY = minBirdY // не дает взлететь выше экрана
+                velocity = 0 // чтобы небыло тряски
+            } else {  // в воздухе
+                birdY += velocity
+            }
+//            println("$velocity ($birdX, $birdY)")
+        } else {
+            drawGameOver(canvas)
         }
 
         handler.postDelayed(runnable, Config.UPDATE_GAME_MILLIS)
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_DOWN) {
-            velocity = -50
+            if (gameState == GameState.GAME) {
+                velocity = -50
+            } else {
+                setRandomBackground()
+                birdY = startBirdY
+                velocity = 0
+                gameState = GameState.GAME
+            }
         }
         return true
     }
 }
-
-//        val metrics: WindowMetrics = (context as Activity).windowManager.getCurrentWindowMetrics()
-//        // Gets all excluding insets
-//        // Gets all excluding insets
-//        val windowInsets = metrics.windowInsets
-//        val insets: Insets = windowInsets.getInsetsIgnoringVisibility(
-//            WindowInsets.Type.navigationBars()
-//                    or WindowInsets.Type.displayCutout()
-//        )
-//
-//        val insetsWidth: Int = insets.right + insets.left
-//        val insetsHeight: Int = insets.top + insets.bottom
-//
-//        // Legacy size that Display#getSize reports
-//
-//        // Legacy size that Display#getSize reports
-//        val bounds = metrics.bounds
-//        val legacySize = Size(
-//            bounds.width() - insetsWidth,
-//            bounds.height() - insetsHeight
-//        )
