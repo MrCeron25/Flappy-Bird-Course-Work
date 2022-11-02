@@ -9,6 +9,9 @@ import androidx.annotation.RequiresApi
 import com.example.flappybird.flappy.FlappyBird
 import com.example.flappybird.flappy.FlappyState
 import com.example.flappybird.percent.Percent.Companion.minusPercentNumber
+import com.example.flappybird.percent.Percent.Companion.plusPercentNumber
+import kotlin.random.Random
+import kotlin.random.nextInt
 
 
 @RequiresApi(Build.VERSION_CODES.R)
@@ -19,21 +22,28 @@ class GameView(context: Context) : View(context) {
     }
 
     private lateinit var background: Bitmap
-    private val heightPixels: Int
-    private val widthPixels: Int
+    private val flappyBird: FlappyBird
     private val base: Bitmap
+    private val topTube: Bitmap
+    private val bottomTube: Bitmap
     private val gameOver: Bitmap
     private val gameOverRectangle: Rect
     private val backgroundRectangle: Rect
     private val baseRectangle: Rect
-    private val flappyBird: FlappyBird
+    private val heightPixels: Int
+    private val widthPixels: Int
+    private var distanceBetweenTubes: Int
+    private var minTubeOffSet: Int
+    private var maxTubeOffSet: Int
+    private var velocity: Int = 0 // скорость
+    private var gravity: Int = 5 // гравитация
     private var birdX: Float
     private var startBirdY: Float
     private var maxBirdY: Float
     private var minBirdY: Float
     private var birdY: Float
-    private var velocity: Int = 0 // скорость
-    private var gravity: Int = 5 // гравитация
+    private var tubeX: Float
+    private var topTubeY: Float = 0.0f
     private var gameState: GameState = GameState.GAME
 
     init {
@@ -86,64 +96,30 @@ class GameView(context: Context) : View(context) {
         birdY = startBirdY
         maxBirdY = heightPixels - base.height - flappyBird.imageState1.height.toFloat()
         minBirdY = 0F
-    }
-
-    @SuppressLint("InternalInsetResource")
-    private fun getFullHeight(heightPixels: Int): Int {
-        // status bar height
-        var statusBarHeight = 0
-        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
-        if (resourceId > 0) {
-            statusBarHeight = resources.getDimensionPixelSize(resourceId)
-        }
-
-        // navigation bar height
-        var navigationBarHeight = 0
-        val resourceId2 = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-        if (resourceId2 > 0) {
-            navigationBarHeight = resources.getDimensionPixelSize(resourceId2)
-        }
-        return heightPixels + navigationBarHeight + statusBarHeight
-    }
-
-    private fun setRandomBackground() {
-        val backgroundRandom = (0..1).shuffled().first()
-        background = if (backgroundRandom == 0) {
-            BitmapFactory.decodeResource(resources, R.drawable.background_day)
-        } else {
-            BitmapFactory.decodeResource(resources, R.drawable.background_night)
-        }
-    }
-
-    private fun drawBackground(canvas: Canvas) {
-        canvas.drawBitmap(background, null, backgroundRectangle, null)
-    }
-
-    private fun drawBase(canvas: Canvas) {
-        canvas.drawBitmap(base, null, baseRectangle, null)
-    }
-
-    private fun drawGameOver(canvas: Canvas) {
-        canvas.drawBitmap(gameOver, null, gameOverRectangle, null)
-    }
-
-    private fun drawFlappy(canvas: Canvas) {
-        when (flappyBird.state) {
-            FlappyState.STATE_1 -> {
-                canvas.drawBitmap(flappyBird.imageState1, birdX, birdY, null)
-                flappyBird.state = FlappyState.STATE_2
-            }
-            FlappyState.STATE_2 -> {
-                canvas.drawBitmap(flappyBird.imageState2, birdX, birdY, null)
-                flappyBird.state = FlappyState.STATE_1
-            }
-        }
+        // tubes
+        val topTubeImage = BitmapFactory.decodeResource(resources, R.drawable.top_tube)
+        topTube = Bitmap.createScaledBitmap(
+            topTubeImage, flappyBird.imageState1.width, // подстраиваю ширину под птичку
+            heightPixels - Config.GAP, false
+        )
+        val bottomTubeImage = BitmapFactory.decodeResource(resources, R.drawable.bottom_tube)
+        bottomTube = Bitmap.createScaledBitmap(
+            bottomTubeImage, flappyBird.imageState1.width, // подстраиваю ширину под птичку
+            heightPixels - Config.GAP, false
+        )
+        distanceBetweenTubes = widthPixels * 3 / 4
+        minTubeOffSet = Config.GAP / 2 // минимальное смещение/отступ
+        maxTubeOffSet =
+            heightPixels - base.height - minTubeOffSet - Config.GAP // максимальное смещение/отступ
+        tubeX = widthPixels / 2 - topTube.width / 2.toFloat()
+        setNewRandomTopTubeY()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         // рисование элементов
         drawBackground(canvas)
+        drawTubes(canvas)
         drawBase(canvas)
         drawFlappy(canvas)
 
@@ -171,6 +147,7 @@ class GameView(context: Context) : View(context) {
         if (event.action == MotionEvent.ACTION_DOWN) {
             if (gameState == GameState.GAME) {
                 velocity = -50
+                setNewRandomTopTubeY()
             } else {
                 setRandomBackground()
                 birdY = startBirdY
@@ -179,5 +156,66 @@ class GameView(context: Context) : View(context) {
             }
         }
         return true
+    }
+
+    @SuppressLint("InternalInsetResource")
+    private fun getFullHeight(heightPixels: Int): Int {
+        // status bar height
+        var statusBarHeight = 0
+        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        if (resourceId > 0) {
+            statusBarHeight = resources.getDimensionPixelSize(resourceId)
+        }
+
+        // navigation bar height
+        var navigationBarHeight = 0
+        val resourceId2 = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        if (resourceId2 > 0) {
+            navigationBarHeight = resources.getDimensionPixelSize(resourceId2)
+        }
+        return heightPixels + navigationBarHeight + statusBarHeight
+    }
+
+    private fun setNewRandomTopTubeY() {
+        topTubeY = minTubeOffSet + Random.nextInt(0..maxTubeOffSet - minTubeOffSet).toFloat()
+    }
+
+    private fun setRandomBackground() {
+        val backgroundRandom = (0..1).random(Random)
+        background = if (backgroundRandom == 0) {
+            BitmapFactory.decodeResource(resources, R.drawable.background_day)
+        } else {
+            BitmapFactory.decodeResource(resources, R.drawable.background_night)
+        }
+    }
+
+    private fun drawTubes(canvas: Canvas) {
+        canvas.drawBitmap(topTube, tubeX, topTubeY - topTube.height.toFloat(), null)
+        canvas.drawBitmap(bottomTube, tubeX, topTubeY + Config.GAP, null)
+    }
+
+    private fun drawBackground(canvas: Canvas) {
+        canvas.drawBitmap(background, null, backgroundRectangle, null)
+    }
+
+    private fun drawBase(canvas: Canvas) {
+        canvas.drawBitmap(base, null, baseRectangle, null)
+    }
+
+    private fun drawGameOver(canvas: Canvas) {
+        canvas.drawBitmap(gameOver, null, gameOverRectangle, null)
+    }
+
+    private fun drawFlappy(canvas: Canvas) {
+        when (flappyBird.state) {
+            FlappyState.STATE_1 -> {
+                canvas.drawBitmap(flappyBird.imageState1, birdX, birdY, null)
+                flappyBird.state = FlappyState.STATE_2
+            }
+            FlappyState.STATE_2 -> {
+                canvas.drawBitmap(flappyBird.imageState2, birdX, birdY, null)
+                flappyBird.state = FlappyState.STATE_1
+            }
+        }
     }
 }

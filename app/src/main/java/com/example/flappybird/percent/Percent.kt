@@ -17,5 +17,10 @@ class Percent {
             if (isNotPercent(percent)) return this
             return this - getPercentageNumber(percent)
         }
+
+        fun Int.plusPercentNumber(percent: Int): Int {
+            if (isNotPercent(percent)) return this
+            return this + getPercentageNumber(percent)
+        }
     }
 }
