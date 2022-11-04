@@ -9,7 +9,6 @@ import androidx.annotation.RequiresApi
 import com.example.flappybird.flappy.FlappyBird
 import com.example.flappybird.flappy.FlappyState
 import com.example.flappybird.percent.Percent.Companion.minusPercentNumber
-import com.example.flappybird.percent.Percent.Companion.plusPercentNumber
 import kotlin.random.Random
 import kotlin.random.nextInt
 
@@ -32,18 +31,21 @@ class GameView(context: Context) : View(context) {
     private val baseRectangle: Rect
     private val heightPixels: Int
     private val widthPixels: Int
-    private var distanceBetweenTubes: Int
     private var minTubeOffSet: Int
     private var maxTubeOffSet: Int
     private var velocity: Int = 0 // скорость
     private var gravity: Int = 5 // гравитация
+    private var distanceBetweenTubes: Float
     private var birdX: Float
     private var startBirdY: Float
     private var maxBirdY: Float
     private var minBirdY: Float
     private var birdY: Float
-    private var tubeX: Float
-    private var topTubeY: Float = 0.0f
+    private var tubeVelocity: Float = Config.TUBE_VELOCITY
+    private var topTubeY =
+        mutableListOf<Float>().apply { (0 until Config.NUMBER_OF_TUBES).forEach { _ -> add(0F) } }
+    private var tubeX =
+        mutableListOf<Float>().apply { (0 until Config.NUMBER_OF_TUBES).forEach { _ -> add(0F) } }
     private var gameState: GameState = GameState.GAME
 
     init {
@@ -107,12 +109,15 @@ class GameView(context: Context) : View(context) {
             bottomTubeImage, flappyBird.imageState1.width, // подстраиваю ширину под птичку
             heightPixels - Config.GAP, false
         )
-        distanceBetweenTubes = widthPixels * 3 / 4
+        distanceBetweenTubes = widthPixels * 3 / 4.toFloat()
         minTubeOffSet = Config.GAP / 2 // минимальное смещение/отступ
         maxTubeOffSet =
             heightPixels - base.height - minTubeOffSet - Config.GAP // максимальное смещение/отступ
-        tubeX = widthPixels / 2 - topTube.width / 2.toFloat()
-        setNewRandomTopTubeY()
+        (0 until Config.NUMBER_OF_TUBES).forEach { index ->
+            tubeX[index] = widthPixels + index * distanceBetweenTubes
+            topTubeY[index] =
+                minTubeOffSet + Random.nextInt(0..maxTubeOffSet - minTubeOffSet).toFloat()
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -147,7 +152,6 @@ class GameView(context: Context) : View(context) {
         if (event.action == MotionEvent.ACTION_DOWN) {
             if (gameState == GameState.GAME) {
                 velocity = -50
-                setNewRandomTopTubeY()
             } else {
                 setRandomBackground()
                 birdY = startBirdY
@@ -176,10 +180,6 @@ class GameView(context: Context) : View(context) {
         return heightPixels + navigationBarHeight + statusBarHeight
     }
 
-    private fun setNewRandomTopTubeY() {
-        topTubeY = minTubeOffSet + Random.nextInt(0..maxTubeOffSet - minTubeOffSet).toFloat()
-    }
-
     private fun setRandomBackground() {
         val backgroundRandom = (0..1).random(Random)
         background = if (backgroundRandom == 0) {
@@ -190,8 +190,18 @@ class GameView(context: Context) : View(context) {
     }
 
     private fun drawTubes(canvas: Canvas) {
-        canvas.drawBitmap(topTube, tubeX, topTubeY - topTube.height.toFloat(), null)
-        canvas.drawBitmap(bottomTube, tubeX, topTubeY + Config.GAP, null)
+        (0 until Config.NUMBER_OF_TUBES).forEach { index ->
+            tubeX[index] -= tubeVelocity
+            if (tubeX[index] < -topTube.width) {
+                tubeX[index] += Config.NUMBER_OF_TUBES * distanceBetweenTubes
+                topTubeY[index] =
+                    minTubeOffSet + Random.nextInt(0..maxTubeOffSet - minTubeOffSet).toFloat()
+            }
+            canvas.drawBitmap(
+                topTube, tubeX[index], topTubeY[index] - topTube.height.toFloat(), null
+            )
+            canvas.drawBitmap(bottomTube, tubeX[index], topTubeY[index] + Config.GAP, null)
+        }
     }
 
     private fun drawBackground(canvas: Canvas) {
